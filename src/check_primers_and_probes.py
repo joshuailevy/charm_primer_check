@@ -2,7 +2,10 @@ import pandas as pd
 from Bio import SeqIO
 import regex as re
 from Bio.Seq import Seq
+import gzip
+import shutil
 from itertools import product
+from pathlib import Path
 
 
 def edit_distance(seq_a, seq_b):
@@ -29,7 +32,25 @@ def expand_primer_options(primer, translator):
     return ["".join(option) for option in product(*base_options)]
 
 
-genomes = '../sequences/Parainfluenza_virus_1/Parainfluenza_virus_1.fasta'
+def gunzip_if_needed(path):
+    #this will gunzip the multi fasta file if needed
+    path = Path(path)
+    if path.suffix != ".gz":
+        return str(path)
+
+    unzipped_path = path.with_suffix("")
+    if (
+        not unzipped_path.exists()
+        or unzipped_path.stat().st_mtime < path.stat().st_mtime
+    ):
+        with gzip.open(path, "rb") as zipped_file:
+            with open(unzipped_path, "wb") as unzipped_file:
+                shutil.copyfileobj(zipped_file, unzipped_file)
+
+    return str(unzipped_path)
+
+
+genomes = gunzip_if_needed('../sequences/Parainfluenza_virus_1/Parainfluenza_virus_1.fasta.gz')
 metadata_path = '../sequences/Parainfluenza_virus_1/Parainfluenza_virus_1_metadata.csv'
 # old_fp = "CGAGCGAGTCGATTTATTACCA"
 forward_primer = "CGGGCGAGYMGATTTATTACCA"
@@ -124,4 +145,3 @@ right_dist_min = result_df.groupby('sequence')['edit_dist_right'].min()
 print('Minimum edit distances (sequences from last two years), for left/right primers')
 print(left_dist_min.value_counts().sort_index())
 print(right_dist_min.value_counts().sort_index())
-
