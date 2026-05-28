@@ -55,12 +55,13 @@ metadata_path = '../sequences/Parainfluenza_virus_1/Parainfluenza_virus_1_metada
 # old_fp = "CGAGCGAGTCGATTTATTACCA"
 forward_primer = "CGGGCGAGYMGATTTATTACCA"
 reverse_primer = "CAATCCGGTTAACATAATTTGT"
+probe = "AATATGGCATTAAAAGARGCAGGW"
 
 ambiguous_bases = {'R', 'Y', 'S', 'W',
                     'K', 'M', 'B', 'D',
                     'H', 'V', 'N'}
 ## expanding ambiguous bases to multiple primers in the ambiguous set
-translator = {'Y':['C','T'],'W':['A','T'],'M':['A','C']}
+translator = {'Y':['C','T'],'W':['A','T'],'M':['A','C'],'R':['A','G']}
 
 primer_df = pd.DataFrame(
     [
@@ -76,7 +77,6 @@ metadata_df = pd.read_csv(
     usecols=["accession", "collection_date", "geo_loc_name"],
 ).set_index("accession")
 
-probe = ""
 maxmismatch=3
 all_results = []
 
@@ -145,3 +145,53 @@ right_dist_min = result_df.groupby('sequence')['edit_dist_right'].min()
 print('Minimum edit distances (sequences from last two years), for left/right primers')
 print(left_dist_min.value_counts().sort_index())
 print(right_dist_min.value_counts().sort_index())
+
+
+probe_results = []
+### now do the same for the probe
+probe_df = pd.DataFrame([probe_v for probe_v in expand_primer_options(probe, translator)], columns=["probe_seq"])
+# # Parse sequences in the multifasta
+for _, row in probe_df.iterrows():
+    probe_seq = row["probe_seq"]
+    # primer_right = row["primer_seq_y"]
+    # primer_right = str(Seq(primer_right).reverse_complement())
+    pattern_probe = f"({probe_seq}){{s<={maxmismatch}}}"
+    # pattern_right = f"({primer_right}){{s<={maxmismatch}}}"
+    for genome_record in SeqIO.parse(genomes, "fasta"):
+        genome_id = genome_record.id
+        genome_seq = str(genome_record.seq)
+        genome_metadata = metadata_df.loc[genome_id]
+        collection_date = genome_metadata["collection_date"]
+        geo_loc_name = genome_metadata["geo_loc_name"]
+
+        ## string matching for now - should switch to something more robust. 
+        probe_fwd = [m.start() for m in re.finditer(pattern_probe,
+                                                   genome_seq,
+                                                   flags=re.IGNORECASE,
+                                                   overlapped=True)]
+        if len(probe_fwd)>1 :
+            print('multiple matching sites!')
+            asdfasdf
+        probe_fwd_actual = [genome_seq[pos:pos+len(probe)]
+                           for pos in probe_fwd]
+        distance_probe = [edit_distance(actual, probe_seq)
+                         for actual in probe_fwd_actual]
+
+        site_has_ambiguity = [any(base in ambiguous_bases
+                                  for base in lfa.upper())
+                              for lfa in probe_fwd_actual]
+        for jL,pfa in enumerate(probe_fwd_actual):
+            probe_results.append([genome_id,collection_date,geo_loc_name,probe_seq,pfa,distance_probe[jL],site_has_ambiguity[jL]])
+probe_result_df = pd.DataFrame(probe_results, columns=['sequence','collection_date','geo_loc_name','probe_seq','probe_match','edit_distance_probe','probe_amb_bases'])
+probe_dist_min = probe_result_df.groupby('sequence')['edit_distance_probe'].min()
+
+print('Minimum edit distances (all seqs), for probe')
+print(probe_dist_min.value_counts().sort_index())
+
+probe_result_df = probe_result_df[probe_result_df['collection_date'].str.contains('2024')| 
+                        probe_result_df['collection_date'].str.contains('2025')| 
+                        probe_result_df['collection_date'].str.contains('2026')]
+probe_dist_min = probe_result_df.groupby('sequence')['edit_distance_probe'].min()
+
+print('Minimum edit distances (sequences from last two years), for probe')
+print(probe_dist_min.value_counts().sort_index())
