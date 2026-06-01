@@ -52,10 +52,10 @@ def gunzip_if_needed(path):
 primer_info = {'Parainfluenza_virus_1':{'forward_primer':"CGGGCGAGYMGATTTATTACCA",'reverse_primer':"CAATCCGGTTAACATAATTTGT",'probe':"AATATGGCATTAAAAGARGCAGGW",'assay':1},
                'Parainfluenza_virus_2':{'forward_primer':"AGGACTATGAAAACCATTTACCTAAGTGA",'reverse_primer':"AAGCAAGTCTCAGTTCAGCTAGRTCA",'probe':"ATCAATCGVAAAAGCTGTTCAGTCACTGCTATAC",'assay':1},
                'Parainfluenza_virus_3':{'forward_primer':"CCRTCTGTTGGACCAGGDATA",'reverse_primer':"GTGTTRCAGATTGCATTCTCATTTA",'probe':"TACAAAGGCAAAATAATATTTCTYGGGTATGGAGGT",'assay':1},
-               'Parainfluenza_virus_4':{'forward_primer':"CTTTTCGACGTGAAGTAGTATTAGA",'reverse_primer':"AGTAATCAGTTGATCGTTGGATGTG",'probe':"ACTCAAGTTAGATCTTTGACTCCTCT",'assay':1},
-               'Parainfluenza_virus_4':{'forward_primer':"CTTTTCGACGTGARGTAGTTCTAGA",'reverse_primer':"AGTAATCATTTGACCGTTGGATRTG",'probe':"ACTCAGGTYAGATCWTTGACTCCTCT",'assay':2},
-               'Human_Metapneumovirus':{'forward_primer':"CAAGTGCGACATTGATGACCTRAA",'reverse_primer':"ATTGCCGCACAACATTYAGAAA",'probe':"TGGCYGTTAGYTTCAGTCARTTCAACAGA",'assay':1},
-               'Human_Metapneumovirus':{'forward_primer':"CAAATGTGACATTGCTGATYTRAA",'reverse_primer':"ACTGCCGCACAACATTTARRAAT",'probe':"TGGCTGTCAGCTTCAGTCARTTCAACAGA",'assay':2},
+               'Parainfluenza_virus_4-1':{'forward_primer':"CTTTTCGACGTGAAGTAGTATTAGA",'reverse_primer':"AGTAATCAGTTGATCGTTGGATGTG",'probe':"ACTCAAGTTAGATCTTTGACTCCTCT",'assay':1},
+               'Parainfluenza_virus_4-2':{'forward_primer':"CTTTTCGACGTGARGTAGTTCTAGA",'reverse_primer':"AGTAATCATTTGACCGTTGGATRTG",'probe':"ACTCAGGTYAGATCWTTGACTCCTCT",'assay':2},
+               'Human_Metapneumovirus-1':{'forward_primer':"CAAGTGCGACATTGATGACCTRAA",'reverse_primer':"ATTGCCGCACAACATTYAGAAA",'probe':"TGGCYGTTAGYTTCAGTCARTTCAACAGA",'assay':1},
+               'Human_Metapneumovirus-2':{'forward_primer':"CAAATGTGACATTGCTGATYTRAA",'reverse_primer':"ACTGCCGCACAACATTTARRAAT",'probe':"TGGCTGTCAGCTTCAGTCARTTCAACAGA",'assay':2},
     }
 ambiguous_bases = {'R', 'Y', 'S', 'W',
                     'K', 'M', 'B', 'D',
@@ -73,12 +73,27 @@ translator = {'Y': ['C', 'T'],
                 'V': ['A', 'C', 'G'],
                 'N': ['A', 'C', 'G', 'T']}
 maxmismatch=3
-for virus in primer_info.keys():
+fail_cut = 1
+summary_rows = []
+fails_per_assay = []
+def collect_value_counts(vc_series, virus, component, filter_label,assay):
+    for edit_dist, count in vc_series.sort_index().items():
+        summary_rows.append({
+            'virus': virus,
+            'component': component,
+            'filter': filter_label,
+            'edit_distance': edit_dist,
+            'count': count,
+            'assay':assay
+        })
+
+for virus0 in primer_info.keys():
+    virus = virus0.split('-')[0]
     print(f"Working on {virus}")
     genomes = gunzip_if_needed(f'../sequences/{virus}/{virus}.fasta.gz')
     metadata_path = f'../sequences/{virus}/{virus}_metadata.csv'
-    forward_primer = primer_info[virus]['forward_primer']
-    reverse_primer = primer_info[virus]['reverse_primer']
+    forward_primer = primer_info[virus0]['forward_primer']
+    reverse_primer = primer_info[virus0]['reverse_primer']
 
     primer_df = pd.DataFrame(
         [
@@ -150,16 +165,18 @@ for virus in primer_info.keys():
     left_result_mins = result_df.loc[result_df.groupby('sequence')['edit_dist_left'].idxmin()]
     right_result_mins = result_df.loc[result_df.groupby('sequence')['edit_dist_right'].idxmin()]
 
-    if primer_info[virus]['assay']==1:
+    if primer_info[virus0]['assay']==1:
         left_result_mins = left_result_mins.to_csv(f'../primer_scoring/left_mins_{virus}.csv')
         right_result_mins = right_result_mins.to_csv(f'../primer_scoring/right_mins_{virus}.csv')
     else:
-        left_result_mins = left_result_mins.to_csv(f"../primer_scoring/left_mins_{virus}_{primer_info[virus]['assay']}.csv")
-        right_result_mins = right_result_mins.to_csv(f"../primer_scoring/right_mins_{virus}_{primer_info[virus]['assay']}.csv")
+        left_result_mins = left_result_mins.to_csv(f"../primer_scoring/left_mins_{virus}_{primer_info[virus0]['assay']}.csv")
+        right_result_mins = right_result_mins.to_csv(f"../primer_scoring/right_mins_{virus}_{primer_info[virus0]['assay']}.csv")
     
     print('Minimum edit distances (all sequences), for left/right primers')
     print(left_dist_min.value_counts().sort_index())
     print(right_dist_min.value_counts().sort_index())
+    collect_value_counts(left_dist_min.value_counts(), virus, 'left_primer', 'all',primer_info[virus0]['assay'])
+    collect_value_counts(right_dist_min.value_counts(), virus, 'right_primer', 'all',primer_info[virus0]['assay'])
 
     result_df = result_df[(result_df['collection_date'].str.contains('2024')| 
                             result_df['collection_date'].str.contains('2025')| 
@@ -170,8 +187,16 @@ for virus in primer_info.keys():
     print('Minimum edit distances (sequences from last two years), for left/right primers')
     print(left_dist_min.value_counts().sort_index())
     print(right_dist_min.value_counts().sort_index())
+    collect_value_counts(left_dist_min.value_counts(), virus, 'left_primer', 'recent_usa',primer_info[virus0]['assay'])
+    collect_value_counts(right_dist_min.value_counts(), virus, 'right_primer', 'recent_usa',primer_info[virus0]['assay'])
 
-    probe = primer_info[virus]['probe']
+    likely_fails_left = left_dist_min[left_dist_min>fail_cut].index.to_list()
+    likely_fails_right = right_dist_min[right_dist_min>fail_cut].index.to_list()
+    # identify potential fails, only using the more recent USA data. 
+    fails_per_assay.extend([[virus, primer_info[virus0]['assay'], 'left_primer',l] for l in likely_fails_left])
+    fails_per_assay.extend([[virus, primer_info[virus0]['assay'], 'right_primer',l] for l in likely_fails_right])
+
+    probe = primer_info[virus0]['probe']
 
     probe_results = []
     ### now do the same for the probe
@@ -211,17 +236,48 @@ for virus in primer_info.keys():
     probe_result_df = pd.DataFrame(probe_results, columns=['sequence','collection_date','geo_loc_name','probe_seq','probe_match','edit_distance_probe','probe_amb_bases'])
     probe_dist_min = probe_result_df.groupby('sequence')['edit_distance_probe'].min()
     probe_result_mins = probe_result_df.loc[probe_result_df.groupby('sequence')['edit_distance_probe'].idxmin()]
-    if primer_info[virus]['assay']==1:
+    if primer_info[virus0]['assay']==1:
         probe_result_mins = probe_result_mins.to_csv(f'../primer_scoring/probe_mins_{virus}.csv')
     else:
-        probe_result_mins = probe_result_mins.to_csv(f"../primer_scoring/probe_mins_{virus}_{primer_info[virus]['assay']}.csv")
+        probe_result_mins = probe_result_mins.to_csv(f"../primer_scoring/probe_mins_{virus}_{primer_info[virus0]['assay']}.csv")
     print('Minimum edit distances (all seqs), for probe')
     print(probe_dist_min.value_counts().sort_index())
+    collect_value_counts(probe_dist_min.value_counts(), virus, 'probe', 'all',primer_info[virus0]['assay'])
 
     probe_result_df = probe_result_df[(probe_result_df['collection_date'].str.contains('2024')| 
                             probe_result_df['collection_date'].str.contains('2025')| 
                             probe_result_df['collection_date'].str.contains('2026')) & (probe_result_df['geo_loc_name'].str.contains("USA"))]
     probe_dist_min = probe_result_df.groupby('sequence')['edit_distance_probe'].min()
+    likely_fails = probe_dist_min[probe_dist_min>fail_cut].index.to_list()
 
     print('Minimum edit distances (sequences from last two years), for probe')
     print(probe_dist_min.value_counts().sort_index())
+    collect_value_counts(probe_dist_min.value_counts(), virus, 'probe', 'recent_usa',primer_info[virus0]['assay'])
+    # identify potential fails, only using the more recent USA data. 
+    fails_per_assay.extend([[virus, primer_info[virus0]['assay'], 'probe',l] for l in likely_fails])
+
+summary_df = pd.DataFrame(summary_rows, columns=['virus', 'component', 'filter', 'edit_distance', 'count','assay'])
+summary_df.to_csv('../primer_scoring/edit_distance_summary.csv', index=False)
+print("Saved summary to ../primer_scoring/edit_distance_summary.csv")
+
+
+fails_df = pd.DataFrame(fails_per_assay, columns=['virus', 'assay', 'component', 'sequence'])
+
+dual_assay_viruses = ['Parainfluenza_virus_4', 'Human_Metapneumovirus']
+dual_fails = fails_df[fails_df['virus'].isin(dual_assay_viruses)]
+
+assay1_fails = dual_fails[dual_fails['assay'] == 1][['virus', 'sequence', 'component']].rename(columns={'component': 'component_assay1'})
+assay2_fails = dual_fails[dual_fails['assay'] == 2][['virus', 'sequence', 'component']].rename(columns={'component': 'component_assay2'})
+
+dual_cross_fails = assay1_fails.merge(assay2_fails, on=['virus', 'sequence'])
+
+single_assay_fails = (
+    fails_df[~fails_df['virus'].isin(dual_assay_viruses)][['virus', 'sequence', 'component']]
+    .rename(columns={'component': 'component_assay1'})
+    .assign(component_assay2=pd.NA)
+)
+
+cross_assay_fails = pd.concat([dual_cross_fails, single_assay_fails], ignore_index=True)
+print('\nSequences that fail (all viruses):')
+print(cross_assay_fails)
+cross_assay_fails.to_csv('../primer_scoring/cross_assay_fails.csv', index=False)
