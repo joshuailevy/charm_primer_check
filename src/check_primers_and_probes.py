@@ -162,9 +162,8 @@ for virus0 in primer_info.keys():
 
     left_dist_min = result_df.groupby('sequence')['edit_dist_left'].min()
     right_dist_min = result_df.groupby('sequence')['edit_dist_right'].min()
-    left_result_mins = result_df.loc[result_df.groupby('sequence')['edit_dist_left'].idxmin()]
-    right_result_mins = result_df.loc[result_df.groupby('sequence')['edit_dist_right'].idxmin()]
-
+    left_result_mins = result_df.loc[result_df.groupby('sequence')['edit_dist_left'].idxmin(),['sequence','collection_date','geo_loc_name','primer_left','left_match','edit_dist_left','left_amb_bases']]
+    right_result_mins = result_df.loc[result_df.groupby('sequence')['edit_dist_right'].idxmin(),['sequence','collection_date','geo_loc_name','primer_right_rev_comp','right_rev_comp_match','edit_dist_right','right_amb_bases']]
     if primer_info[virus0]['assay']==1:
         left_result_mins = left_result_mins.to_csv(f'../primer_scoring/left_mins_{virus}.csv')
         right_result_mins = right_result_mins.to_csv(f'../primer_scoring/right_mins_{virus}.csv')
