@@ -26,6 +26,16 @@ def edit_distance(seq_a, seq_b):
     return previous_row[-1]
 
 
+def diff_positions(primer, actual, from_end=False):
+    """Return 1-based positions where primer and actual sequence differ.
+    If from_end, positions count from the 3' end of the primer."""
+    n = len(primer)
+    positions = [i + 1 for i, (a, b) in enumerate(zip(primer.upper(), actual.upper())) if a != b]
+    if from_end:
+        positions = [n - p + 1 for p in positions]
+    return positions
+
+
 def expand_primer_options(primer, translator):
     primer = str(primer).upper()
     base_options = [translator.get(base, [base]) for base in primer]
@@ -147,6 +157,8 @@ for virus0 in primer_info.keys():
                             for actual in left_fwd_actual]
             distance_right = [edit_distance(actual, primer_right)
                             for actual in right_rev_actual]
+            pos_diffs_left = [diff_positions(primer_left, lfa) for lfa in left_fwd_actual]
+            pos_diffs_right = [diff_positions(primer_right, rfa, from_end=True) for rfa in right_rev_actual]
 
             left_has_ambiguity = [any(base in ambiguous_bases
                                     for base in lfa.upper())
@@ -156,14 +168,14 @@ for virus0 in primer_info.keys():
                                 for rfa in right_rev_actual]
             for jL,lfa in enumerate(left_fwd_actual):
                 for jR,rfa in enumerate(right_rev_actual):
-                    all_results.append([genome_id,collection_date,geo_loc_name,primer_left,primer_right,lfa,rfa,distance_left[jL],left_has_ambiguity[jL],distance_right[jR],right_has_ambiguity[jR]])
+                    all_results.append([genome_id,collection_date,geo_loc_name,primer_left,primer_right,lfa,rfa,distance_left[jL],left_has_ambiguity[jL],pos_diffs_left[jL],distance_right[jR],right_has_ambiguity[jR],pos_diffs_right[jR]])
 
-    result_df = pd.DataFrame(all_results, columns=['sequence','collection_date','geo_loc_name','primer_left','primer_right_rev_comp','left_match','right_rev_comp_match','edit_dist_left','left_amb_bases','edit_dist_right','right_amb_bases'])
+    result_df = pd.DataFrame(all_results, columns=['sequence','collection_date','geo_loc_name','primer_left','primer_right_rev_comp','left_match','right_rev_comp_match','edit_dist_left','left_amb_bases','pos_diffs_left','edit_dist_right','right_amb_bases','pos_diffs_right'])
 
     left_dist_min = result_df.groupby('sequence')['edit_dist_left'].min()
     right_dist_min = result_df.groupby('sequence')['edit_dist_right'].min()
-    left_result_mins = result_df.loc[result_df.groupby('sequence')['edit_dist_left'].idxmin(),['sequence','collection_date','geo_loc_name','primer_left','left_match','edit_dist_left','left_amb_bases']]
-    right_result_mins = result_df.loc[result_df.groupby('sequence')['edit_dist_right'].idxmin(),['sequence','collection_date','geo_loc_name','primer_right_rev_comp','right_rev_comp_match','edit_dist_right','right_amb_bases']]
+    left_result_mins = result_df.loc[result_df.groupby('sequence')['edit_dist_left'].idxmin(),['sequence','collection_date','geo_loc_name','primer_left','left_match','edit_dist_left','left_amb_bases','pos_diffs_left']]
+    right_result_mins = result_df.loc[result_df.groupby('sequence')['edit_dist_right'].idxmin(),['sequence','collection_date','geo_loc_name','primer_right_rev_comp','right_rev_comp_match','edit_dist_right','right_amb_bases','pos_diffs_right']]
     if primer_info[virus0]['assay']==1:
         left_result_mins = left_result_mins.to_csv(f'../primer_scoring/left_mins_{virus}.csv')
         right_result_mins = right_result_mins.to_csv(f'../primer_scoring/right_mins_{virus}.csv')
@@ -226,13 +238,14 @@ for virus0 in primer_info.keys():
                             for pos in probe_fwd]
             distance_probe = [edit_distance(actual, probe_seq)
                             for actual in probe_fwd_actual]
+            pos_diffs_probe = [diff_positions(probe_seq, pfa) for pfa in probe_fwd_actual]
 
             site_has_ambiguity = [any(base in ambiguous_bases
                                     for base in lfa.upper())
                                 for lfa in probe_fwd_actual]
             for jL,pfa in enumerate(probe_fwd_actual):
-                probe_results.append([genome_id,collection_date,geo_loc_name,probe_seq,pfa,distance_probe[jL],site_has_ambiguity[jL]])
-    probe_result_df = pd.DataFrame(probe_results, columns=['sequence','collection_date','geo_loc_name','probe_seq','probe_match','edit_distance_probe','probe_amb_bases'])
+                probe_results.append([genome_id,collection_date,geo_loc_name,probe_seq,pfa,distance_probe[jL],site_has_ambiguity[jL],pos_diffs_probe[jL]])
+    probe_result_df = pd.DataFrame(probe_results, columns=['sequence','collection_date','geo_loc_name','probe_seq','probe_match','edit_distance_probe','probe_amb_bases','pos_diffs_probe'])
     probe_dist_min = probe_result_df.groupby('sequence')['edit_distance_probe'].min()
     probe_result_mins = probe_result_df.loc[probe_result_df.groupby('sequence')['edit_distance_probe'].idxmin()]
     if primer_info[virus0]['assay']==1:
